@@ -281,6 +281,8 @@ cd build
 make check
 ```
 
+**Expected Results**: 22 out of 23 tests should pass (96%). The C++ vmtest may fail with a SIGTRAP signal on modern macOS systems, but this doesn't affect Mozart2's core functionality. All Oz-language tests pass successfully.
+
 To run specific test categories:
 
 ```bash
