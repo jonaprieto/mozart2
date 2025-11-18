@@ -50,13 +50,13 @@ BoostVM::BoostVM(BoostEnvironment& environment,
   uuidGenerator(),
   portClosed(false),
   _asyncIONodeCount(0),
-  preemptionTimer(new boost::asio::deadline_timer(environment.io_context)),
+  preemptionTimer(new boost::asio::steady_timer(environment.io_context)),
   alarmTimer(environment.io_context),
   _terminationRequested(false),
   _terminationStatus(0),
   _terminationReason("normal"),
   // Make sure the IO thread will wait for us
-  _work(new boost::asio::io_context::work(environment.io_context)) {
+  _work(new boost::asio::executor_work_guard<boost::asio::io_context::executor_type>(boost::asio::make_work_guard(environment.io_context))) {
 
   if (identifier != parent)
     addMonitor(parent);
@@ -110,7 +110,7 @@ void BoostVM::run() {
 
     // Setup the preemption timer
     boost::asio::post(env.io_context, [&](){
-        preemptionTimer->expires_from_now(boost::posix_time::millisec(1));
+        preemptionTimer->expires_after(std::chrono::milliseconds(1));
         preemptionTimer->async_wait(boost::bind(
               &BoostVM::onPreemptionTimerExpire,
               this, boost::asio::placeholders::error));
@@ -122,7 +122,7 @@ void BoostVM::run() {
 
     // Stop the preemption timer
     boost::asio::post(env.io_context, [&](){
-        preemptionTimer->expires_at(boost::posix_time::min_date_time);
+        preemptionTimer->cancel();
     });
 
     {
@@ -154,7 +154,7 @@ void BoostVM::run() {
         // Setup the alarm time, if asked by the VM
         if (nextInvoke == recInvokeAgainLater) {
           alarmTimer.expires_at(
-            BoostEnvironment::referenceTimeToPTime(nextInvokePair.second));
+            BoostEnvironment::referenceTimeToTimePoint(nextInvokePair.second));
           alarmTimer.async_wait([this] (const boost::system::error_code& err) {
             if (!err) {
               boost::lock_guard<boost::mutex> lock(_conditionWorkToDoInVMMutex);
@@ -178,16 +178,13 @@ void BoostVM::onPreemptionTimerExpire(const boost::system::error_code& error) {
     // Timer was cancelled
   } else if (_terminationRequested) {
     // Termination was requested
-  } else if (preemptionTimer->expires_at() == boost::posix_time::min_date_time) {
-    // Timer was cancelled, but we missed it (race condition in io_context)
   } else {
     // Preemption
     vm->setReferenceTime(env.getReferenceTime());
     vm->requestPreempt();
 
     // Reschedule
-    preemptionTimer->expires_at(
-        preemptionTimer->expires_at() + boost::posix_time::millisec(1));
+    preemptionTimer->expires_after(std::chrono::milliseconds(1));
     preemptionTimer->async_wait(boost::bind(
           &BoostVM::onPreemptionTimerExpire,
           this, boost::asio::placeholders::error));
@@ -334,7 +331,7 @@ void BoostVM::terminate() {
   // It may be deleted before the execution of the callback.
   // For the same reason, we access the io_context via the timer.
   boost::asio::post(env.io_context, [preemptionTimerCopy]{
-      preemptionTimerCopy->expires_at(boost::posix_time::min_date_time);
+      preemptionTimerCopy->cancel();
       // We cannot delete the timer now because the onPreemptionTimerExpire handler
       // may already be in the queue. So add a delete lambda to the queue.
       // The lambda will execute after any leftover handlers on the timer and

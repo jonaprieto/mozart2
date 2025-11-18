@@ -21,7 +21,7 @@ set(MOZART_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(MOZART_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 
 set(DEFAULT_MOZART_GENERATOR_FLAGS
-      "--std=c++0x"
+      "--std=c++17"
       "-Wno-invalid-noreturn"
       "-Wno-return-type"
       "-Wno-braced-scalar-init" # Silence warning for macro ATOMIC_FLAG_INIT in atomic_base.h

@@ -98,7 +98,7 @@ public:
 
   inline
   void removeTerminatedVM(VMIdentifier identifier, nativeint exitCode,
-                          boost::asio::io_context::work* work);
+                          boost::asio::executor_work_guard<boost::asio::io_context::executor_type>* work);
 
   // Executes callback on behalf of the target VM if it is still alive.
   inline
@@ -133,6 +133,17 @@ public:
   static boost::posix_time::ptime epoch() {
     using namespace boost::gregorian;
     return boost::posix_time::ptime(date(1970, Jan, 1));
+  }
+
+  static std::chrono::steady_clock::time_point referenceTimeToTimePoint(std::int64_t time) {
+    // Convert milliseconds since epoch to a steady_clock time_point
+    // Note: steady_clock doesn't have a fixed epoch, so we convert relative to now
+    auto now = std::chrono::steady_clock::now();
+    auto system_now = std::chrono::system_clock::now();
+    auto system_now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        system_now.time_since_epoch()).count();
+    auto offset_ms = time - system_now_ms;
+    return now + std::chrono::milliseconds(offset_ms);
   }
 
 // UUID generation
